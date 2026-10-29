@@ -1,0 +1,1119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QueryLang IDE - Compiler Stage Inspector & Dataset Visualizer</title>
+    <style>
+        :root {
+            --bg-primary: #0b1120;
+            --bg-secondary: #131d31;
+            --bg-card: #182238;
+            --bg-input: #090e1a;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --border-color: #23314e;
+            --accent-blue: #38bdf8;
+            --accent-cyan: #06b6d4;
+            --accent-green: #34d399;
+            --accent-amber: #fbbf24;
+            --accent-purple: #c084fc;
+            --accent-red: #f87171;
+            --font-mono: 'Consolas', 'Fira Code', 'Courier New', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        header {
+            background-color: rgba(11, 17, 32, 0.96);
+            border-bottom: 1px solid var(--border-color);
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .brand-title {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .badge-logo {
+            background: linear-gradient(135deg, #0284c7, #6366f1);
+            color: white;
+            font-weight: 800;
+            font-family: var(--font-mono);
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-size: 16px;
+            letter-spacing: 1px;
+            box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 520px 1fr;
+            flex: 1;
+            overflow: hidden;
+            height: calc(100vh - 66px);
+        }
+
+        /* Sidebar / Left Editor Pane */
+        .editor-pane {
+            background-color: #0e1628;
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            padding: 16px;
+            gap: 14px;
+            overflow-y: auto;
+        }
+
+        .section-card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-title {
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            color: var(--accent-blue);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .form-select, .form-input {
+            width: 100%;
+            background-color: var(--bg-input);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            padding: 8px 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            outline: none;
+            cursor: pointer;
+            transition: border-color 0.15s;
+        }
+
+        .form-select:focus, .form-input:focus {
+            border-color: var(--accent-blue);
+        }
+
+        /* Upload Area */
+        .upload-dropzone {
+            border: 2px dashed var(--border-color);
+            border-radius: 6px;
+            padding: 12px;
+            text-align: center;
+            background-color: rgba(9, 14, 26, 0.6);
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .upload-dropzone:hover, .upload-dropzone.dragover {
+            border-color: var(--accent-blue);
+            background-color: rgba(56, 189, 248, 0.08);
+        }
+
+        .upload-dropzone svg {
+            color: var(--accent-blue);
+        }
+
+        .upload-label {
+            font-size: 12px;
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .upload-hint {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        /* Dataset Info Preview */
+        .dataset-info-box {
+            background-color: rgba(9, 14, 26, 0.8);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 8px 10px;
+            font-size: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .col-chips-wrap {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 4px;
+        }
+
+        .col-chip {
+            background-color: #1e2d4a;
+            color: var(--accent-cyan);
+            border: 1px solid #2d436e;
+            padding: 2px 7px;
+            border-radius: 4px;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .col-chip:hover {
+            background-color: #2b3e66;
+            color: white;
+            border-color: var(--accent-blue);
+        }
+
+        /* Textarea / Query Editor */
+        textarea#query-editor {
+            width: 100%;
+            height: 180px;
+            background-color: var(--bg-input);
+            color: #7dd3fc;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 12px;
+            font-family: var(--font-mono);
+            font-size: 13.5px;
+            line-height: 1.5;
+            resize: vertical;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+
+        textarea#query-editor:focus {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 1px var(--accent-blue);
+        }
+
+        .editor-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-small {
+            background-color: #23314e;
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11.5px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .btn-small:hover {
+            background-color: #2e4168;
+            color: white;
+        }
+
+        /* Options & Target */
+        .radio-row {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            font-size: 12.5px;
+        }
+
+        .radio-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+        }
+
+        /* Big Run Button */
+        .btn-run-all {
+            background: linear-gradient(135deg, #0284c7, #2563eb);
+            color: white;
+            border: none;
+            padding: 13px;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 14.5px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+        }
+
+        .btn-run-all:hover {
+            filter: brightness(1.15);
+            transform: translateY(-1px);
+        }
+
+        .btn-run-all:active {
+            transform: translateY(0);
+        }
+
+        /* Stages list buttons */
+        .stages-bar {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .stage-btn {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            padding: 8px 12px;
+            border-radius: 6px;
+            text-align: left;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.15s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .stage-btn:hover {
+            background-color: #23314e;
+            color: white;
+        }
+
+        .stage-btn.active {
+            background-color: #0284c7;
+            color: white;
+            border-color: #38bdf8;
+            font-weight: 600;
+        }
+
+        .meta-pill {
+            display: inline-block;
+            padding: 2px 7px;
+            border-radius: 9999px;
+            font-size: 10.5px;
+            font-weight: 600;
+            background: #23314e;
+            color: #94a3b8;
+        }
+
+        /* Right Results Pane */
+        .results-pane {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background-color: var(--bg-primary);
+        }
+
+        .tabs-header {
+            display: flex;
+            background-color: #070c17;
+            border-bottom: 1px solid var(--border-color);
+            overflow-x: auto;
+        }
+
+        .tab-item {
+            padding: 12px 18px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            white-space: nowrap;
+            transition: all 0.15s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .tab-item:hover {
+            color: var(--text-primary);
+        }
+
+        .tab-item.active {
+            color: var(--accent-blue);
+            border-bottom-color: var(--accent-blue);
+            background-color: rgba(56, 189, 248, 0.06);
+            font-weight: 600;
+        }
+
+        .tab-badge {
+            font-size: 10px;
+            padding: 1px 6px;
+            border-radius: 4px;
+            background: rgba(255,255,255,0.08);
+        }
+
+        .output-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background-color: #070c16;
+            position: relative;
+        }
+
+        .output-toolbar {
+            padding: 8px 16px;
+            background-color: #0a101d;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .output-views-toggle {
+            display: flex;
+            gap: 6px;
+        }
+
+        .view-btn {
+            background-color: #162035;
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 11.5px;
+            cursor: pointer;
+        }
+
+        .view-btn.active {
+            background-color: #0284c7;
+            color: white;
+            border-color: #38bdf8;
+        }
+
+        .output-content {
+            flex: 1;
+            padding: 18px;
+            overflow: auto;
+            font-family: var(--font-mono);
+            font-size: 13px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            color: #e2e8f0;
+        }
+
+        /* Rendered HTML Data Table */
+        .table-view-container {
+            display: none;
+            flex: 1;
+            padding: 18px;
+            overflow: auto;
+        }
+
+        .table-view-container.active {
+            display: block;
+        }
+
+        .extracted-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: var(--font-mono);
+            font-size: 13px;
+            background-color: #0d1527;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .extracted-table th {
+            background-color: #17243e;
+            color: var(--accent-blue);
+            font-weight: 700;
+            text-align: left;
+            padding: 10px 14px;
+            border-bottom: 2px solid var(--border-color);
+            position: sticky;
+            top: 0;
+        }
+
+        .extracted-table td {
+            padding: 9px 14px;
+            border-bottom: 1px solid #1c2a46;
+            color: #f1f5f9;
+        }
+
+        .extracted-table tr:hover {
+            background-color: rgba(56, 189, 248, 0.05);
+        }
+
+        .extracted-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .table-summary-bar {
+            margin-bottom: 12px;
+            font-size: 12.5px;
+            color: var(--accent-green);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="brand-title">
+        <span class="badge-logo">QueryLang</span>
+        <div>
+            <h2 style="font-size: 16px; font-weight: 700;">Query Compiler Pipeline Visualizer & Dataset Explorer</h2>
+            <p style="font-size: 12px; color: var(--text-secondary);">Flex Lexer • Bison LALR(1) • Dynamic Symbol Table • TAC & Quadruples • Dataset Execution Engine</p>
+        </div>
+    </div>
+</header>
+
+<div class="container">
+    <!-- Left Pane: Editor, Upload & Controls -->
+    <div class="editor-pane">
+
+        <!-- 1. Dataset Selection & Upload -->
+        <div class="section-card">
+            <div class="card-header">
+                <span class="card-title">
+                    <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5L14 4.5zm-3 0A1.5 1.5 0 0 1 9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5h-2z"/>
+                    </svg>
+                    1. Dataset Source (Sample or Upload)
+                </span>
+                <span class="meta-pill" id="dataset-status-pill">Ready</span>
+            </div>
+
+            <!-- Dataset Dropdown -->
+            <select id="dataset-select" class="form-select" onchange="onDatasetSelected()">
+                <option value="data/employees.csv">employees.csv (Sample: 10 rows, salary, dept)</option>
+                <option value="data/students.csv">students.csv (Sample: 5 rows, GPA, branch)</option>
+                <option value="data/large_employees.csv">large_employees.csv (Sample: 250K rows)</option>
+                <option value="data/benchmark_100k.csv">benchmark_100k.csv (Sample: 100K rows)</option>
+            </select>
+
+            <!-- Upload Area -->
+            <div class="upload-dropzone" id="dropzone" onclick="document.getElementById('csv-file-input').click()">
+                <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                </svg>
+                <span class="upload-label">Click or Drag & Drop a CSV Dataset</span>
+                <span class="upload-hint">Upload any .csv file to query your custom data</span>
+                <input type="file" id="csv-file-input" accept=".csv" style="display: none;" onchange="handleFileUpload(event)">
+            </div>
+
+            <!-- Detected Dataset Info Box -->
+            <div class="dataset-info-box" id="dataset-info-box">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="color: var(--text-muted); font-size: 11px;">Active Dataset:</span>
+                    <strong style="color: var(--accent-blue);" id="active-dataset-path">data/employees.csv</strong>
+                </div>
+                <div>
+                    <span style="color: var(--text-muted); font-size: 11px;">Detected Columns (click to add to query):</span>
+                    <div class="col-chips-wrap" id="col-chips-container">
+                        <!-- Loaded dynamically -->
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: flex-end; margin-top: 4px;">
+                    <button class="btn-small" onclick="generateQueryTemplate()">+ Auto-Generate Query for this Dataset</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. Preset Sample Queries -->
+        <div class="section-card">
+            <div class="card-header">
+                <span class="card-title">
+                    <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+                        <path d="M6.271 5.055a.5.5 0 0 1 .52.038l3.5 2.5a.5.5 0 0 1 0 .814l-3.5 2.5A.5.5 0 0 1 6 10.5v-5a.5.5 0 0 1 .271-.445z"/>
+                    </svg>
+                    2. Preset Demonstration Queries
+                </span>
+            </div>
+            <select id="preset-queries" class="form-select" onchange="loadPreset()">
+                <option value="test1">Test 1: Basic Projection & Filter (salary > 60000)</option>
+                <option value="test2">Test 2: Full Pipeline + Aggregate (AVG salary)</option>
+                <option value="test3">Test 3: Compound Logical Filter (Engineering AND age > 30)</option>
+                <option value="test4">Test 4: Students GPA Query (gpa >= 8.5, MAX gpa)</option>
+                <option value="test5">Error Recovery 1: Lexical Violation (# symbol)</option>
+                <option value="test6">Error Recovery 2: Syntax Error (Incomplete SELECT)</option>
+                <option value="test7">Error Recovery 3: Semantic Mismatch (AVG on text column)</option>
+            </select>
+        </div>
+
+        <!-- 3. Query Editor Textbox -->
+        <div class="section-card" style="gap: 8px;">
+            <div class="card-header">
+                <span class="card-title">
+                    <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M14.5 3a.5.5 0 0 1 .5.5v9a.5.5 0 0 1-.5.5h-13a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5h13zm-13-1A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h13a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 14.5 2h-13z"/>
+                        <path d="M3 5.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5zM3 8a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9A.5.5 0 0 1 3 8zm0 2.5a.5.5 0 0 1 .5-.5h6a.5.5 0 0 1 0 1h-6a.5.5 0 0 1-.5-.5z"/>
+                    </svg>
+                    3. Query Editor (.ql Textbox)
+                </span>
+                <div class="editor-actions">
+                    <button class="btn-small" onclick="clearQuery()">Clear</button>
+                    <button class="btn-small" onclick="formatQuery()">Format</button>
+                </div>
+            </div>
+
+            <textarea id="query-editor" spellcheck="false" placeholder="Write or paste your QueryLang SQL query here...&#10;LOAD &quot;data/employees.csv&quot; AS emp;&#10;SELECT name, salary;&#10;FILTER salary > 60000;"></textarea>
+
+            <div style="font-size: 11px; color: var(--text-muted); line-height: 1.4;">
+                Syntax: <code style="color: var(--accent-cyan);">LOAD &quot;filepath&quot; AS alias; SELECT col1, col2; FILTER cond; AGGREGATE FUNC(col);</code>
+            </div>
+        </div>
+
+        <!-- 4. Execution Engine Options & Run Button -->
+        <div class="section-card">
+            <div class="card-header">
+                <span class="card-title" style="font-size: 11px;">4. Engine Target</span>
+                <div class="radio-row">
+                    <label class="radio-label">
+                        <input type="radio" name="engine" value="simd" checked>
+                        <span>AVX2 SIMD (V2)</span>
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="engine" value="scalar">
+                        <span>Scalar Zero-Copy (V1)</span>
+                    </label>
+                    <label class="radio-label">
+                        <input type="checkbox" id="chk-bench" checked>
+                        <span>Benchmark</span>
+                    </label>
+                </div>
+            </div>
+
+            <button class="btn-run-all" onclick="runPipeline('all')">
+                <svg width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/>
+                </svg>
+                Run Complete Pipeline (All Stages + Data)
+            </button>
+        </div>
+
+        <!-- 5. Stage-by-Stage Inspector Buttons -->
+        <div class="section-card" style="gap: 6px;">
+            <span class="card-title" style="font-size: 11px; margin-bottom: 2px;">5. Run Individual Compiler Phase</span>
+            <div class="stages-bar">
+                <button class="stage-btn" onclick="runPipeline('lex')"><span>1. Lexical Analysis</span><span class="meta-pill">Flex Tokens</span></button>
+                <button class="stage-btn" onclick="runPipeline('syntax')"><span>2. Syntactic Analysis</span><span class="meta-pill">Bison LALR(1)</span></button>
+                <button class="stage-btn" onclick="runPipeline('ast')"><span>3. Abstract Syntax Tree</span><span class="meta-pill">AST Graph</span></button>
+                <button class="stage-btn" onclick="runPipeline('symtab')"><span>4. Dynamic Symbol Table</span><span class="meta-pill">Inferred Schema</span></button>
+                <button class="stage-btn" onclick="runPipeline('semantic')"><span>5. Semantic Verification</span><span class="meta-pill">Type Safety</span></button>
+                <button class="stage-btn" onclick="runPipeline('tac')"><span>6. Intermediate Code</span><span class="meta-pill">TAC & Quads</span></button>
+                <button class="stage-btn" onclick="runPipeline('exec')" style="border-color: var(--accent-green); color: #86efac;">
+                    <span>7. Execution Result</span><span class="meta-pill" style="background:#064e3b; color:#34d399;">Extracted Data</span>
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Right Pane: Tabs & Terminal Output / Extracted Data Table -->
+    <div class="results-pane">
+        <div class="tabs-header">
+            <div class="tab-item active" id="tab-all" onclick="selectTab('all')">
+                <span>Full Pipeline All-in-One</span>
+                <span class="tab-badge">All</span>
+            </div>
+            <div class="tab-item" id="tab-lex" onclick="selectTab('lex')">1. Tokens</div>
+            <div class="tab-item" id="tab-syntax" onclick="selectTab('syntax')">2. Syntax</div>
+            <div class="tab-item" id="tab-ast" onclick="selectTab('ast')">3. AST Graph</div>
+            <div class="tab-item" id="tab-symtab" onclick="selectTab('symtab')">4. Symbol Table</div>
+            <div class="tab-item" id="tab-semantic" onclick="selectTab('semantic')">5. Semantic Check</div>
+            <div class="tab-item" id="tab-tac" onclick="selectTab('tac')">6. TAC & Quads</div>
+            <div class="tab-item" id="tab-exec" onclick="selectTab('exec')" style="color: var(--accent-green); font-weight: bold;">
+                <span>7. Extracted Data Result</span>
+                <span class="tab-badge" style="background: rgba(52, 211, 153, 0.2); color: #34d399;">Table</span>
+            </div>
+        </div>
+
+        <div class="output-container">
+            <div class="output-toolbar">
+                <span id="output-status-text">Ready. Choose a query or enter your own, then click Run.</span>
+                <div class="output-views-toggle">
+                    <button class="view-btn active" id="btn-view-raw" onclick="setViewMode('raw')">Console Log</button>
+                    <button class="view-btn" id="btn-view-table" onclick="setViewMode('table')">Rendered Table View</button>
+                    <button class="view-btn" onclick="copyOutput()">Copy Text</button>
+                </div>
+            </div>
+
+            <!-- Raw Terminal Text Output -->
+            <pre class="output-content" id="terminal-output">// QueryLang Compiler Pipeline Visualizer
+// Select a preset query or upload a CSV dataset to write custom queries.
+// Click 'Run Complete Pipeline' to see all phases and the extracted dataset rows.</pre>
+
+            <!-- Rendered Interactive HTML Table View -->
+            <div class="table-view-container" id="table-view-container">
+                <div class="table-summary-bar" id="table-summary-bar">
+                    <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm15 2h-4v3h4V4zm0 4h-4v3h4V8zm0 4h-4v3h3a1 1 0 0 0 1-1v-2zm-5 3v-3H6v3h4zm-5 0v-3H1v2a1 1 0 0 0 1 1h3zm-4-4h4V8H1v3zm0-4h4V4H1v3zm5-3v3h4V4H6zm4 4H6v3h4V8z"/>
+                    </svg>
+                    <span id="table-summary-text">No extracted dataset results to display yet. Run query first.</span>
+                </div>
+                <div id="table-content-area"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const presets = {
+        test1: `LOAD "data/employees.csv" AS emp_data;
+SELECT name, department, salary;
+FILTER salary > 60000;`,
+
+        test2: `LOAD "data/employees.csv" AS emp_data;
+SELECT name, salary;
+FILTER salary >= 50000;
+AGGREGATE AVG(salary);`,
+
+        test3: `LOAD "data/employees.csv" AS emp_data;
+SELECT name, department, salary, age;
+FILTER department == "Engineering" AND age > 30;
+AGGREGATE COUNT(*);`,
+
+        test4: `LOAD "data/students.csv" AS student_records;
+SELECT name, branch, gpa;
+FILTER gpa >= 8.5;
+AGGREGATE MAX(gpa);`,
+
+        test5: `LOAD "data/employees.csv" AS emp_data;
+SELECT name, #invalid_char;
+FILTER salary > 50000;`,
+
+        test6: `LOAD "data/employees.csv" AS emp_data;
+SELECT ;
+FILTER salary > 50000;`,
+
+        test7: `LOAD "data/employees.csv" AS emp_data;
+SELECT name, bonus_percentage;
+FILTER salary > 50000;
+AGGREGATE AVG(department);`
+    };
+
+    let datasetColumnsMap = {
+        "data/employees.csv": ["id", "name", "department", "salary", "age"],
+        "data/students.csv": ["id", "name", "branch", "gpa", "semester"],
+        "data/large_employees.csv": ["id", "name", "department", "salary", "age"],
+        "data/benchmark_100k.csv": ["id", "val1", "val2", "val3", "category"]
+    };
+
+    let currentDatasetPath = "data/employees.csv";
+    let cachedOutputs = {};
+    let currentViewMode = "raw"; // 'raw' or 'table'
+
+    // Load available datasets on startup
+    async function fetchDatasetsList() {
+        try {
+            const res = await fetch('/api/datasets');
+            if (res.ok) {
+                const datasets = await res.json();
+                const sel = document.getElementById('dataset-select');
+                sel.innerHTML = '';
+                
+                datasets.forEach(d => {
+                    const opt = document.createElement('option');
+                    opt.value = d.path;
+                    opt.textContent = `${d.name} (${d.isSample ? 'Sample' : 'Uploaded'}: ${d.size})`;
+                    sel.appendChild(opt);
+
+                    if (d.columns && d.columns.length > 0) {
+                        datasetColumnsMap[d.path] = d.columns;
+                    }
+                });
+
+                // Select current dataset if present
+                if (datasetColumnsMap[currentDatasetPath]) {
+                    sel.value = currentDatasetPath;
+                }
+                updateDatasetInfo(sel.value);
+            }
+        } catch (e) {
+            console.log("Using default datasets cache");
+            updateDatasetInfo("data/employees.csv");
+        }
+    }
+
+    function onDatasetSelected() {
+        const path = document.getElementById('dataset-select').value;
+        currentDatasetPath = path;
+        updateDatasetInfo(path);
+        updateQueryLoadPath(path);
+    }
+
+    function updateDatasetInfo(path) {
+        document.getElementById('active-dataset-path').textContent = path;
+        const chipsContainer = document.getElementById('col-chips-container');
+        chipsContainer.innerHTML = '';
+
+        const cols = datasetColumnsMap[path] || ["id", "val1", "val2"];
+        cols.forEach(col => {
+            const chip = document.createElement('span');
+            chip.className = 'col-chip';
+            chip.textContent = col;
+            chip.title = `Click to add '${col}' to SELECT statement`;
+            chip.onclick = () => addColumnToQuery(col);
+            chipsContainer.appendChild(chip);
+        });
+    }
+
+    function addColumnToQuery(colName) {
+        const editor = document.getElementById('query-editor');
+        let text = editor.value;
+        if (text.includes("SELECT ")) {
+            // Append to SELECT line
+            text = text.replace(/SELECT\s+([^;\n]+)/, (match, cols) => {
+                if (cols.trim().split(',').map(s => s.trim()).includes(colName)) {
+                    return match; // already present
+                }
+                return `SELECT ${cols.trim()}, ${colName}`;
+            });
+            editor.value = text;
+        } else {
+            editor.value += `\nSELECT ${colName};`;
+        }
+    }
+
+    function updateQueryLoadPath(newPath) {
+        const editor = document.getElementById('query-editor');
+        let text = editor.value;
+        // Replace existing LOAD "..." statement
+        if (text.includes('LOAD "')) {
+            editor.value = text.replace(/LOAD\s+"[^"]+"\s+AS\s+([^;]+);/, `LOAD "${newPath}" AS $1;`);
+        }
+    }
+
+    function generateQueryTemplate() {
+        const path = currentDatasetPath;
+        const cols = datasetColumnsMap[path] || ["id", "name"];
+        const alias = path.split('/').pop().replace('.csv', '').replace(/[^a-zA-Z0-9]/g, '_');
+        const selectCols = cols.slice(0, Math.min(3, cols.length)).join(', ');
+        
+        let template = `LOAD "${path}" AS ${alias};\nSELECT ${selectCols};\n`;
+        if (cols.length >= 2) {
+            template += `// Optional filter:\n// FILTER ${cols[1]} > 100;\n`;
+        }
+        document.getElementById('query-editor').value = template;
+    }
+
+    // CSV File Upload Handling
+    async function handleFileUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        if (!file.name.toLowerCase().endsWith('.csv')) {
+            alert("Please upload a valid .csv file.");
+            return;
+        }
+
+        const pill = document.getElementById('dataset-status-pill');
+        pill.textContent = "Uploading...";
+        pill.style.background = "#92400e";
+        pill.style.color = "#fef08a";
+
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+            const content = e.target.result;
+            try {
+                const res = await fetch('/api/upload', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        filename: file.name,
+                        content: content
+                    })
+                });
+
+                const data = await res.json();
+                if (data.success) {
+                    pill.textContent = "Uploaded ✓";
+                    pill.style.background = "#14532d";
+                    pill.style.color = "#4ade80";
+
+                    datasetColumnsMap[data.path] = data.columns;
+                    currentDatasetPath = data.path;
+
+                    // Add to dropdown and select it
+                    const sel = document.getElementById('dataset-select');
+                    const opt = document.createElement('option');
+                    opt.value = data.path;
+                    opt.textContent = `${data.filename} (Uploaded: ${data.rowCount} rows)`;
+                    sel.appendChild(opt);
+                    sel.value = data.path;
+
+                    updateDatasetInfo(data.path);
+
+                    // Update query editor with starter template for uploaded dataset
+                    const colsPreview = data.columns.slice(0, Math.min(4, data.columns.length)).join(', ');
+                    const aliasName = data.filename.replace('.csv', '').replace(/[^a-zA-Z0-9]/g, '_');
+                    document.getElementById('query-editor').value = `LOAD "${data.path}" AS ${aliasName};\nSELECT ${colsPreview};\n`;
+
+                    document.getElementById('output-status-text').textContent = data.message;
+                    alert(`Dataset '${data.filename}' uploaded successfully!\nRows: ${data.rowCount}\nColumns: ${data.columns.join(', ')}\n\nQuery editor has been updated with the new dataset path.`);
+                } else {
+                    alert("Upload error: " + (data.error || "Unknown"));
+                    pill.textContent = "Error";
+                    pill.style.background = "#7f1d1d";
+                    pill.style.color = "#f87171";
+                }
+            } catch (err) {
+                alert("Upload failed: " + err.message);
+                pill.textContent = "Error";
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    // Drag and drop events
+    const dropzone = document.getElementById('dropzone');
+    dropzone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropzone.classList.add('dragover');
+    });
+    dropzone.addEventListener('dragleave', () => {
+        dropzone.classList.remove('dragover');
+    });
+    dropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            document.getElementById('csv-file-input').files = e.dataTransfer.files;
+            handleFileUpload({ target: { files: e.dataTransfer.files } });
+        }
+    });
+
+    function loadPreset() {
+        const val = document.getElementById('preset-queries').value;
+        if (presets[val]) {
+            document.getElementById('query-editor').value = presets[val];
+            // Extract dataset path from preset if present
+            const m = presets[val].match(/LOAD\s+"([^"]+)"/);
+            if (m && m[1]) {
+                currentDatasetPath = m[1];
+                const sel = document.getElementById('dataset-select');
+                if (sel) sel.value = m[1];
+                updateDatasetInfo(m[1]);
+            }
+        }
+    }
+
+    function clearQuery() {
+        document.getElementById('query-editor').value = '';
+    }
+
+    function formatQuery() {
+        const editor = document.getElementById('query-editor');
+        const lines = editor.value.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        editor.value = lines.join('\n');
+    }
+
+    function selectTab(tabId) {
+        document.querySelectorAll('.tab-item').forEach(el => el.classList.remove('active'));
+        const tabEl = document.getElementById('tab-' + tabId);
+        if (tabEl) tabEl.classList.add('active');
+
+        if (tabId === 'exec') {
+            setViewMode('table');
+        }
+
+        const out = document.getElementById('terminal-output');
+        if (cachedOutputs[tabId]) {
+            out.textContent = cachedOutputs[tabId];
+            parseAndRenderTable(cachedOutputs[tabId]);
+        } else if (tabId === 'all' && cachedOutputs['all']) {
+            out.textContent = cachedOutputs['all'];
+            parseAndRenderTable(cachedOutputs['all']);
+        } else {
+            runPipeline(tabId);
+        }
+    }
+
+    function setViewMode(mode) {
+        currentViewMode = mode;
+        const btnRaw = document.getElementById('btn-view-raw');
+        const btnTbl = document.getElementById('btn-view-table');
+        const outPre = document.getElementById('terminal-output');
+        const tblDiv = document.getElementById('table-view-container');
+
+        if (mode === 'table') {
+            btnRaw.classList.remove('active');
+            btnTbl.classList.add('active');
+            outPre.style.display = 'none';
+            tblDiv.classList.add('active');
+        } else {
+            btnRaw.classList.add('active');
+            btnTbl.classList.remove('active');
+            outPre.style.display = 'block';
+            tblDiv.classList.remove('active');
+        }
+    }
+
+    function parseAndRenderTable(text) {
+        const summaryText = document.getElementById('table-summary-text');
+        const contentArea = document.getElementById('table-content-area');
+
+        if (!text || !text.includes('--- Query Result')) {
+            summaryText.textContent = "No dataset rows returned for this stage.";
+            contentArea.innerHTML = '<p style="color: var(--text-muted); font-size: 13px;">This compiler stage produced grammar/intermediate data rather than an extracted dataset table. Switch to Console Log or run stage 7.</p>';
+            return;
+        }
+
+        // Find table lines
+        const lines = text.split('\n');
+        let tableHeaderTitle = "Extracted Dataset Query Result";
+        const tableLines = [];
+        let capturing = false;
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (line.startsWith('--- Query Result')) {
+                tableHeaderTitle = line.replace(/---/g, '').trim();
+                capturing = true;
+                continue;
+            }
+            if (capturing) {
+                if (line.startsWith('+') || line.startsWith('|')) {
+                    tableLines.push(line);
+                } else if (line.length > 0 && !line.startsWith('+') && !line.startsWith('|')) {
+                    // end of table block
+                    if (tableLines.length > 2) break;
+                }
+            }
+        }
+
+        if (tableLines.length < 3) {
+            summaryText.textContent = tableHeaderTitle;
+            contentArea.innerHTML = '<p style="color: var(--text-muted);">No tabular rows found.</p>';
+            return;
+        }
+
+        // Parse ASCII table
+        // Find row lines that start with '|'
+        const rowLines = tableLines.filter(l => l.startsWith('|'));
+        if (rowLines.length === 0) return;
+
+        const headers = rowLines[0].split('|').slice(1, -1).map(c => c.trim());
+        const dataRows = rowLines.slice(1).map(r => r.split('|').slice(1, -1).map(c => c.trim()));
+
+        summaryText.textContent = `${tableHeaderTitle} • Extracted ${dataRows.length} rows with ${headers.length} columns`;
+
+        let html = '<table class="extracted-table"><thead><tr>';
+        headers.forEach(h => {
+            html += `<th>${escapeHtml(h)}</th>`;
+        });
+        html += '</tr></thead><tbody>';
+
+        dataRows.forEach(row => {
+            html += '<tr>';
+            row.forEach(cell => {
+                html += `<td>${escapeHtml(cell)}</td>`;
+            });
+            html += '</tr>';
+        });
+
+        html += '</tbody></table>';
+        contentArea.innerHTML = html;
+    }
+
+    function escapeHtml(str) {
+        return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    async function runPipeline(stage) {
+        const queryText = document.getElementById('query-editor').value;
+        const engine = document.querySelector('input[name="engine"]:checked').value;
+        const benchmark = document.getElementById('chk-bench').checked;
+        const out = document.getElementById('terminal-output');
+        const statusText = document.getElementById('output-status-text');
+
+        out.textContent = `[Processing] Running QueryLang compiler phase: '${stage}' on dataset '${currentDatasetPath}' ...\n`;
+        statusText.textContent = `Compiling & executing query [stage: ${stage}] ...`;
+
+        document.querySelectorAll('.tab-item').forEach(el => el.classList.remove('active'));
+        const tabEl = document.getElementById('tab-' + stage);
+        if (tabEl) tabEl.classList.add('active');
+
+        // Highlight stage button
+        document.querySelectorAll('.stage-btn').forEach(btn => btn.classList.remove('active'));
+
+        try {
+            const res = await fetch('/api/execute', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    query: queryText,
+                    stage: stage,
+                    engine: engine,
+                    benchmark: benchmark
+                })
+            });
+
+            const data = await res.json();
+            cachedOutputs[stage] = data.output;
+            out.textContent = data.output;
+            statusText.textContent = `Execution completed successfully. (Engine: ${engine.toUpperCase()})`;
+
+            parseAndRenderTable(data.output);
+
+            if (stage === 'exec') {
+                setViewMode('table');
+            }
+        } catch (err) {
+            out.textContent = "Error communicating with QueryLang backend server: " + err.message;
+            statusText.textContent = "Error executing query.";
+        }
+    }
+
+    function copyOutput() {
+        const text = document.getElementById('terminal-output').textContent;
+        navigator.clipboard.writeText(text).then(() => {
+            alert("Console output copied to clipboard!");
+        });
+    }
+
+    // Startup initialization
+    window.onload = function() {
+        fetchDatasetsList();
+        loadPreset();
+    };
+</script>
+
+</body>
+</html>
